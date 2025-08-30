@@ -1,5 +1,8 @@
 import regex as re
 from collections import defaultdict
+from typing import Iterator, Iterable
+from functools import cache, lru_cache
+
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
@@ -91,3 +94,80 @@ def getMerges(path, vocabSize, specialTokens):
     for idx, word in enumerate(vocabulary):
         vocabDict[idx] = word
     return vocabDict, merges
+
+def pretokenContainsBytePair(pretokenTuple, bytePairTuple):
+    for idx, byte in enumerate(pretokenTuple[:-1]):
+        if byte == bytePairTuple[0] and pretokenTuple[idx + 1] == bytePairTuple[1]:
+            return True, idx
+    return False, 0
+
+def tryMerge(pretoken, mergedPair):
+    modifiedPretoken = list(pretoken)
+    pretokenContainsMerge = False
+    while True:
+        mergeLocationTuple = pretokenContainsBytePair(modifiedPretoken, mergedPair)
+        if not mergeLocationTuple[0]:
+            break
+        pretokenContainsMerge = True
+        mergeLocation = mergeLocationTuple[1]
+        
+        modifiedPretoken[mergeLocation + 1] = mergedPair[0] + mergedPair[1]
+        modifiedPretoken = modifiedPretoken[:mergeLocation] + modifiedPretoken[mergeLocation + 1:]
+    modifiedPretoken = tuple(modifiedPretoken)
+    return modifiedPretoken
+
+@lru_cache(maxsize=20000)
+def tokenizeWord(word, merges):
+    modifiedPretoken = word
+    for merge in merges:
+        modifiedPretoken = tryMerge(modifiedPretoken, merge)
+    return modifiedPretoken
+    
+class Tokenizer():
+    def __init__(self, vocab, merges, special_tokens=None):
+        self.vocab = vocab
+        self.merges = tuple(merges)
+        self.special_tokens = special_tokens
+        self.vocabToIdx = {v : k for k, v in self.vocab.items()}
+    def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None):
+        pass
+    def encode(self, text: str) -> list[int]:
+        if self.special_tokens is not None:
+            tokens_sorted = sorted(self.special_tokens, key=len, reverse=True)
+
+            specialTokenPAT = "(" + "|".join(re.escape(s) for s in tokens_sorted) + ")"
+            docs = re.split(specialTokenPAT, text)
+        else:
+            docs = [text]
+        pretokenizedWords = []
+        
+        for doc in docs:
+            if self.special_tokens is not None and doc in self.special_tokens:
+                pretokenizedWords.append((doc.encode('utf-8'),))
+            else:
+                splitText = re.finditer(PAT, doc)
+                for idx, x in enumerate(splitText):
+                    bytesRep = tuple(k.to_bytes() for k in x[0].encode('utf-8'))
+                    pretokenizedWords.append(bytesRep)
+        idSequence = []
+        for pretoken in pretokenizedWords:
+            if self.special_tokens is not None and pretoken in self.special_tokens:
+                idSequence.append(self.vocabToIdx[pretoken])
+                continue
+            modifiedPretoken = tokenizeWord(pretoken, self.merges)
+            for tok in modifiedPretoken:
+                idSequence.append(self.vocabToIdx[tok])
+            
+        
+        return idSequence
+        
+    def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
+        for string in iterable:
+            for tok in self.encode(string):
+                yield tok
+    def decode(self, ids: list[int]) -> str:
+        txt = b''
+        for tokId in ids:
+            byte = self.vocab[tokId]
+            txt += byte
+        return txt.decode('utf-8', errors='replace')

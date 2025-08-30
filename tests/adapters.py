@@ -28,8 +28,11 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
+    from cs336_basics.transformerStuff import MyLinear
 
-    raise NotImplementedError
+    myLin = MyLinear(d_in, d_out)
+    myLin.load_state_dict({"mat": weights})
+    return myLin(in_features)
 
 
 def run_embedding(
@@ -50,8 +53,11 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
+    from cs336_basics.transformerStuff import MyEmbedding
 
-    raise NotImplementedError
+    myEmb = MyEmbedding(vocab_size, d_model)
+    myEmb.load_state_dict({"mat": weights})
+    return myEmb(token_ids)
 
 
 def run_swiglu(
@@ -83,7 +89,12 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    from cs336_basics.transformerStuff import MySwiGLU
+    swiglu = MySwiGLU(d_model, d_ff)
+    swiglu.w1.mat.data = w1_weight
+    swiglu.w2.mat.data = w2_weight
+    swiglu.w3.mat.data = w3_weight
+    return swiglu(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -104,7 +115,9 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    from cs336_basics.transformerStuff import scaledDotProdAttention
+
+    return scaledDotProdAttention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
@@ -200,7 +213,9 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    from cs336_basics.transformerStuff import MyRope
+    rope = MyRope(d_k, theta, max_seq_len)
+    return rope(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -378,7 +393,10 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    from cs336_basics.transformerStuff import MyRMSNorm
+    rms = MyRMSNorm(d_model, eps)
+    rms.load_state_dict({"gain": weights})
+    return rms(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
@@ -559,7 +577,8 @@ def get_tokenizer(
     Returns:
         A BPE tokenizer that uses the provided vocab, merges, and special tokens.
     """
-    raise NotImplementedError
+    from cs336_basics.bytepairStuff import Tokenizer
+    return Tokenizer(vocab, merges, special_tokens)
 
 
 def run_train_bpe(
