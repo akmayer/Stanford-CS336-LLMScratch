@@ -100,7 +100,7 @@ class MyRope(nn.Module):
         evenTables = tablesOfInterest[..., 0]
         oddTables = tablesOfInterest[..., 1]
 
-        return evenX * evenTables + oddX * oddTables
+        return (evenX * evenTables + oddX * oddTables).to(x.dtype)
 
 def softmax(x: torch.Tensor, dim):
     x = x - x.max(dim=dim, keepdim=True).values
@@ -116,3 +116,56 @@ def scaledDotProdAttention(queries, keys, values, mask=None):
     
     softAttention = softmax(presoftAttention, dim = -1)
     return einx.dot("b ... quer [key], b ... [key] d_v -> b ... quer d_v", softAttention, values)
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, d_model, num_heads, device=None, dtype=None):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.dk = d_model // num_heads
+
+        self.Wq = MyLinear(d_model, d_model)
+        self.Wk = MyLinear(d_model, d_model)
+        self.Wv = MyLinear(d_model, d_model)
+        self.Wo = MyLinear(d_model, d_model)
+    def forward(self, x):
+        seq = x.shape[-2]
+        queries = self.Wq(x)
+        keys = self.Wk(x)
+        values = self.Wv(x)
+        queries = einx.rearrange("... seq (heads dk) -> ... heads seq dk", queries, dk=self.dk)
+        keys = einx.rearrange("... seq (heads dk) -> ... heads seq dk", keys, dk=self.dk)
+        values = einx.rearrange("... seq (heads dk) -> ... heads seq dk", values, dk=self.dk)
+        mask = torch.tril(torch.ones((seq, seq))).bool()
+        attended = scaledDotProdAttention(queries, keys, values, mask)
+        multiHead = einx.rearrange("... heads seq dk -> ... seq (heads dk)", attended)
+        return self.Wo(multiHead)
+class MultiHeadSelfAttentionRope(nn.Module):
+    def __init__(self, d_model, num_heads, max_seq_len, theta, device=None, dtype=None):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.dk = d_model // num_heads
+
+        self.rope = MyRope(self.dk, theta, max_seq_len)
+
+        self.Wq = MyLinear(d_model, d_model)
+        self.Wk = MyLinear(d_model, d_model)
+        self.Wv = MyLinear(d_model, d_model)
+        self.Wo = MyLinear(d_model, d_model)
+    def forward(self, x, token_positions):
+        seq = x.shape[-2]
+        queries = self.Wq(x)
+        keys = self.Wk(x)
+        values = self.Wv(x)
+        queries = einx.rearrange("... seq (heads dk) -> ... heads seq dk", queries, dk=self.dk)
+        keys = einx.rearrange("... seq (heads dk) -> ... heads seq dk", keys, dk=self.dk)
+        values = einx.rearrange("... seq (heads dk) -> ... heads seq dk", values, dk=self.dk)
+
+        queries = self.rope(queries, token_positions.unsqueeze(-2).expand(keys.shape[:-1]))
+        keys = self.rope(keys, token_positions.unsqueeze(-2).expand(keys.shape[:-1]))
+        
+        mask = torch.tril(torch.ones((seq, seq))).bool()
+
+        attended = scaledDotProdAttention(queries, keys, values, mask)
+        multiHead = einx.rearrange("... heads seq dk -> ... seq (heads dk)", attended)
+        return self.Wo(multiHead)
