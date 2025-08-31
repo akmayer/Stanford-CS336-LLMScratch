@@ -2,6 +2,7 @@ import regex as re
 from collections import defaultdict
 from typing import Iterator, Iterable
 from functools import cache, lru_cache
+from tqdm import tqdm
 
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
@@ -16,8 +17,7 @@ def makeMerge(pretokenizedCounts):
     bytePairCounts = defaultdict(int)
     for pretoken, count in pretokenizedCounts.items():
         for idx, byte in enumerate(pretoken[:-1]):
-            bytePairCounts[(byte, pretoken[idx + 1])] += count
-    
+            bytePairCounts[(byte.to_bytes(), pretoken[idx + 1].to_bytes())] += count
     bytePairCountsSorted = sorted(bytePairCounts.items(), key = lambda x : (x[1], x[0]), reverse=True)
     
     merge = bytePairCountsSorted[0][0]
@@ -66,13 +66,24 @@ def getMerges(path, vocabSize, specialTokens):
         data = f.read()
         
     specialTokenPAT = '|'.join(re.escape(s) for s in specialTokens)
-    docs = re.split(specialTokenPAT, data)
-
+    sep_re = re.compile(specialTokenPAT)
+    tok_re = re.compile(PAT)
+    
+    def iter_docs(text):
+        start = 0
+        for m in sep_re.finditer(text):
+            yield text[start:m.start()]
+            start = m.end()
+        yield text[start:]
+    
+    # Count docs quickly without building them
+    num_docs = sum(1 for _ in sep_re.finditer(data)) + 1
+    
     pretokenizedCounts = defaultdict(int)
-    for doc in docs:
-        splitText = re.finditer(PAT, doc)
-        for x in splitText:
-            bytesRep = tuple(k.to_bytes() for k in x[0].encode('utf-8'))
+    print("Tokenizing Docs...")
+    for doc in tqdm(iter_docs(data), total=num_docs):
+        for x in tok_re.finditer(doc):
+            bytesRep = x.group(0).encode('utf-8')  # use bytes directly
             pretokenizedCounts[bytesRep] += 1
     
         
@@ -80,15 +91,26 @@ def getMerges(path, vocabSize, specialTokens):
     
     merges = []
     bytePairCounts, mergedPair, pairCount = makeMerge(pretokenizedCounts)
-    while len(vocabulary) < vocabSize:
-        
+    print(mergedPair)
+    
+    num_merges = vocabSize - len(vocabulary)
+
+    print("Merging...")
+    for _ in tqdm(range(num_merges), total=num_merges, desc="Merging", disable=False):
         merges.append(mergedPair)
         vocabulary.append(mergedPair[0] + mergedPair[1])
-        pretokensContainingMerge, pretokenizedCounts = mergePretokenizedCounts(pretokenizedCounts, mergedPair, bytePairCounts)
-        bytePairCountsSorted = sorted(bytePairCounts.items(), key = lambda x : (x[1], x[0]), reverse=True)
     
-        mergedPair = bytePairCountsSorted[0][0]
-        pairCount = bytePairCountsSorted[0][1]
+        pretokensContainingMerge, pretokenizedCounts = mergePretokenizedCounts(
+            pretokenizedCounts, mergedPair, bytePairCounts
+        )
+    
+        bytePairCountsSorted = sorted(
+            bytePairCounts.items(),
+            key=lambda x: (x[1], x[0]),
+            reverse=True
+        )
+    
+        mergedPair, pairCount = bytePairCountsSorted[0]
         bytePairCounts[mergedPair] = 0
     vocabDict = {}
     for idx, word in enumerate(vocabulary):
