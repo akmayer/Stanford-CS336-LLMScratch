@@ -1,3 +1,37 @@
+1000 Epochs, Batch Size of 16, Hyperparameters similar to the ones suggested for tinystories, but with double the layers:
+### Code Snippet #1 Prompt: "Ben was sad because":
+```python
+generatedStem = "Ben was sad because"
+for x in tqdm(range(100)):
+    generatedStem = generateOneToken(transformer, tok, generatedStem, device='cuda:0')
+print(generatedStem)"
+```
+Transformer Output:
+
+Ben was sad because he lost his toy.
+"Lily, Lily, look at my toy!" Ben cried. "I did not know. Maybe I can fix it."
+Lily looked at the toy and asked her mom for help. She was very sorry and scared. She hugged Ben and said, "It's okay, Ben. We can play together again."
+
+
+Tim and Lily liked to play together. They had a big ball to play with. They threw the ball to each other. But their
+
+
+### Code Snippet #2 Prompt: "Ben was happy because":
+
+```python
+generatedStem = "Ben was happy because"
+for x in tqdm(range(100)):
+    generatedStem = generateOneToken(transformer, tok, generatedStem, device='cuda:0')
+print(generatedStem)
+```
+Transformer Output:
+
+Ben was happy because he found the ball. He was so glad and happy. He thanked Lily for being so helpful, and she had a big smile on her face. She played and skipped every day and had lots of fun.
+
+
+Lily liked to play with her new toy car. She had a pink car with long ago and a lot of toys. She wanted to keep her car in the box, so she started to go faster. She took a deep breath and went to her room. She felt happy
+
+
 # CS336 Spring 2025 Assignment 1: Basics
 
 For a full description of the assignment, see the assignment handout at
