@@ -60,6 +60,8 @@ class MySwiGLU(nn.Module):
         
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        print("Inp Shape", x.shape)
+        print(self.w1.mat.shape)
         w1x = self.w1(x)
         w3x = self.w3(x)
         elwiseProd = self.SILU(w1x) * w3x
@@ -169,3 +171,45 @@ class MultiHeadSelfAttentionRope(nn.Module):
         attended = scaledDotProdAttention(queries, keys, values, mask)
         multiHead = einx.rearrange("... heads seq dk -> ... seq (heads dk)", attended)
         return self.Wo(multiHead)
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, max_seq_len, theta):
+        super().__init__()
+        print("Model Shape, FFWD Shape:")
+        print(d_model, d_ff)
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+
+        self.RMS1 = MyRMSNorm(d_model)
+        self.RMS2 = MyRMSNorm(d_model)
+
+        self.mhsar = MultiHeadSelfAttentionRope(d_model, num_heads, max_seq_len, theta)
+        self.ffwd = MySwiGLU(d_model, d_ff)
+
+    def forward(self, x):
+        token_positions = torch.arange(x.shape[-2]).expand(x.shape[:-1])
+        y = x + self.mhsar(self.RMS1(x), token_positions)
+        print("y Shape", y.shape)
+        z = y + self.ffwd(self.RMS2(y))
+        return z
+        
+class Transformer(nn.Module):
+    def __init__(self, vocab_size, context_length, num_layers, d_model, num_heads, d_ff, theta):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.context_length = context_length
+        self.embedding = MyEmbedding(vocab_size, d_model)
+        self.transformerBlocks = nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, context_length, theta) for _ in range(num_layers)])
+        self.rmsNorm = MyRMSNorm(d_model)
+        self.outFwd = MyLinear(d_model, vocab_size)
+    def forward(self, tokIds):
+        emb = self.embedding(tokIds)
+        for block in self.transformerBlocks:
+            emb = block(emb)
+        emb = self.rmsNorm(emb)
+        emb = self.outFwd(emb)
+        #emb = softmax(emb, dim=-1)
+        return emb

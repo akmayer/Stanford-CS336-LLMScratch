@@ -300,7 +300,20 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    from cs336_basics.transformerStuff import TransformerBlock
+    transformerBlock = TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
+    transformerBlock.mhsar.Wq.mat.data = weights['attn.q_proj.weight'].to(transformerBlock.mhsar.Wq.mat.dtype)
+    transformerBlock.mhsar.Wk.mat.data = weights['attn.k_proj.weight'].to(transformerBlock.mhsar.Wk.mat.dtype)
+    transformerBlock.mhsar.Wv.mat.data = weights['attn.v_proj.weight'].to(transformerBlock.mhsar.Wv.mat.dtype)
+    transformerBlock.mhsar.Wo.mat.data = weights['attn.output_proj.weight'].to(transformerBlock.mhsar.Wo.mat.dtype)
+
+    transformerBlock.RMS1.gain.data = weights['ln1.weight'].to(transformerBlock.RMS1.gain.dtype)
+    transformerBlock.RMS2.gain.data = weights['ln2.weight'].to(transformerBlock.RMS2.gain.dtype)
+
+    transformerBlock.ffwd.w1.mat.data = weights['ffn.w1.weight'].to(transformerBlock.ffwd.w1.mat.dtype)
+    transformerBlock.ffwd.w2.mat.data = weights['ffn.w2.weight'].to(transformerBlock.ffwd.w2.mat.dtype)
+    transformerBlock.ffwd.w3.mat.data = weights['ffn.w3.weight'].to(transformerBlock.ffwd.w3.mat.dtype)
+    return transformerBlock(in_features)
 
 
 def run_transformer_lm(
@@ -382,7 +395,23 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    from cs336_basics.transformerStuff import Transformer
+    model = Transformer(vocab_size, context_length, num_layers, d_model, num_heads, d_ff, rope_theta)
+    model.embedding.mat.data = weights['token_embeddings.weight']
+    for i, block in enumerate(model.transformerBlocks):
+        p = f'layers.{i}.'
+        block.mhsar.Wq.mat.data = weights[p + 'attn.q_proj.weight']
+        block.mhsar.Wk.mat.data = weights[p + 'attn.k_proj.weight']
+        block.mhsar.Wv.mat.data = weights[p + 'attn.v_proj.weight']
+        block.mhsar.Wo.mat.data = weights[p + 'attn.output_proj.weight']
+        block.RMS1.gain.data     = weights[p + 'ln1.weight']
+        block.RMS2.gain.data     = weights[p + 'ln2.weight']
+        block.ffwd.w1.mat.data   = weights[p + 'ffn.w1.weight']
+        block.ffwd.w2.mat.data   = weights[p + 'ffn.w2.weight']
+        block.ffwd.w3.mat.data   = weights[p + 'ffn.w3.weight']
+    model.rmsNorm.gain.data = weights['ln_final.weight']
+    model.outFwd.mat.data   = weights['lm_head.weight']
+    return model(in_indices)
 
 
 def run_rmsnorm(
@@ -479,7 +508,8 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    from cs336_basics.trainingSupplement import cross_entropy
+    return cross_entropy(inputs, targets)
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
@@ -498,7 +528,8 @@ def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    from cs336_basics.trainingSupplement import AdamW
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
@@ -526,7 +557,8 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    from cs336_basics.trainingSupplement import lrScheduler
+    return lrScheduler(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(
