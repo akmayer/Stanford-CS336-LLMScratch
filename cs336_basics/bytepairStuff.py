@@ -17,7 +17,7 @@ def makeMerge(pretokenizedCounts):
     bytePairCounts = defaultdict(int)
     for pretoken, count in pretokenizedCounts.items():
         for idx, byte in enumerate(pretoken[:-1]):
-            bytePairCounts[(byte.to_bytes(), pretoken[idx + 1].to_bytes())] += count
+            bytePairCounts[(byte, pretoken[idx + 1])] += count
     bytePairCountsSorted = sorted(bytePairCounts.items(), key = lambda x : (x[1], x[0]), reverse=True)
     
     merge = bytePairCountsSorted[0][0]
@@ -83,7 +83,7 @@ def getMerges(path, vocabSize, specialTokens):
     print("Tokenizing Docs...")
     for doc in tqdm(iter_docs(data), total=num_docs):
         for x in tok_re.finditer(doc):
-            bytesRep = x.group(0).encode('utf-8')  # use bytes directly
+            bytesRep = tuple(k.to_bytes() for k in x[0].encode('utf-8'))
             pretokenizedCounts[bytesRep] += 1
     
         
