@@ -74,3 +74,20 @@ def lrScheduler(t, alphaMax, alphaMin, Tw, Tc):
         return alphaMin + 0.5 * (1 + cosPortion) * (alphaMax - alphaMin)
     else:
         return alphaMin
+
+def gradientClipper(paramList, maxNorm, eps=1e-6):
+    norm = 0
+    for param in paramList:
+        if param.grad is None:
+            continue
+        norm += (param.grad.data ** 2).sum()
+        
+    norm = norm ** 0.5
+    
+    if norm < maxNorm:
+        return
+        
+    for param in paramList:
+        if param.grad is None:
+            continue
+        param.grad.data *= maxNorm / (norm + eps)
