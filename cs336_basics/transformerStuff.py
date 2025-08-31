@@ -60,8 +60,6 @@ class MySwiGLU(nn.Module):
         
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        print("Inp Shape", x.shape)
-        print(self.w1.mat.shape)
         w1x = self.w1(x)
         w3x = self.w3(x)
         elwiseProd = self.SILU(w1x) * w3x
@@ -175,8 +173,6 @@ class MultiHeadSelfAttentionRope(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, max_seq_len, theta):
         super().__init__()
-        print("Model Shape, FFWD Shape:")
-        print(d_model, d_ff)
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_ff = d_ff
@@ -192,7 +188,6 @@ class TransformerBlock(nn.Module):
     def forward(self, x):
         token_positions = torch.arange(x.shape[-2]).expand(x.shape[:-1])
         y = x + self.mhsar(self.RMS1(x), token_positions)
-        print("y Shape", y.shape)
         z = y + self.ffwd(self.RMS2(y))
         return z
         

@@ -138,7 +138,7 @@ def tryMerge(pretoken, mergedPair):
     modifiedPretoken = tuple(modifiedPretoken)
     return modifiedPretoken
 
-@lru_cache(maxsize=20000)
+@cache
 def tokenizeWord(word, merges):
     modifiedPretoken = word
     for merge in merges:
@@ -153,17 +153,32 @@ class Tokenizer():
         self.vocabToIdx = {v : k for k, v in self.vocab.items()}
     def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None):
         pass
-    def encode(self, text: str) -> list[int]:
+    def encode(self, text: str, verbose=False) -> list[int]:
         if self.special_tokens is not None:
             tokens_sorted = sorted(self.special_tokens, key=len, reverse=True)
 
             specialTokenPAT = "(" + "|".join(re.escape(s) for s in tokens_sorted) + ")"
-            docs = re.split(specialTokenPAT, text)
+            sep_re = re.compile(specialTokenPAT)
+            tok_re = re.compile(PAT)
+            
+            def iter_docs(text):
+                start = 0
+                for m in sep_re.finditer(text):
+                    yield text[start:m.start()]
+                    start = m.end()
+                yield text[start:]
+            
+            # Count docs quickly without building them
+            num_docs = sum(1 for _ in sep_re.finditer(text)) + 1
+            docs = iter_docs(text)
         else:
             docs = [text]
+            num_docs = 1
         pretokenizedWords = []
-        
-        for doc in docs:
+        iterator = docs
+        if verbose:
+            iterator = tqdm(docs, total=num_docs)
+        for doc in iterator:
             if self.special_tokens is not None and doc in self.special_tokens:
                 pretokenizedWords.append((doc.encode('utf-8'),))
             else:
@@ -172,7 +187,10 @@ class Tokenizer():
                     bytesRep = tuple(k.to_bytes() for k in x[0].encode('utf-8'))
                     pretokenizedWords.append(bytesRep)
         idSequence = []
-        for pretoken in pretokenizedWords:
+        iterator = pretokenizedWords
+        if verbose:
+            iterator = tqdm(pretokenizedWords)
+        for pretoken in iterator:
             if self.special_tokens is not None and pretoken in self.special_tokens:
                 idSequence.append(self.vocabToIdx[pretoken])
                 continue
