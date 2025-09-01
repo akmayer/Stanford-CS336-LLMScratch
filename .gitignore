@@ -11,6 +11,8 @@ data/
 profile.html
 profile.json
 
+ckpt.pt
+
 # Distribution / packaging
 .Python
 build/
